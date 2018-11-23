@@ -153,13 +153,19 @@ namespace Foundation {
       set { _shouldRunTests = value; }
     }
     public delegate Task<ExpandoObject> RunTestAsyncDelegate(ExpandoObject parameters, params Func<ExpandoObject, ExpandoObject>[] merge);
+    public static Task<Dictionary<Type, ExpandoObject>> RunTestsAsync(bool runFast, Func<TestableException, bool> exceptionHandler, params string[] exceptTypeFullName)
+      => RunTestsAsync(runFast, null, exceptionHandler, exceptTypeFullName);
     /// <summary>
     /// Call RunTest(Fast) in all "tesable" types in all assemblies.
     /// </summary>
     /// <param name="runFast">fasle:use RunTestFast,true: use RunTest</param>
+    /// <param name="log"></param>
     /// <param name="exceptionHandler">Function that returns false in case of unhandled exception</param>
     /// <param name="exceptTypeFullName">Full names of types which shouldn't run</param>
-    public static async Task<Dictionary<Type, ExpandoObject>> RunTestsAsync(bool runFast, Func<TestableException, bool> exceptionHandler, params string[] exceptTypeFullName) {
+    public static async Task<Dictionary<Type, ExpandoObject>> RunTestsAsync(bool runFast
+    , Action<(Type t, PropertyInfo pi)> log
+    , Func<TestableException, bool> exceptionHandler
+    , params string[] exceptTypeFullName) {
       Dictionary<Type, ExpandoObject> tested = new Dictionary<Type, ExpandoObject>();
       var testMethod = "RunTest" + (runFast ? "Fast" : "") + "Async";
       var testsExceptions = (await
@@ -176,7 +182,11 @@ namespace Foundation {
          .Select(async a => {
            try {
              var d = a.f.GetValue(null) as RunTestAsyncDelegate;
-             //onTested("Calling " + a.t.FullName + "." + a.f.Name);
+             try { log?.Invoke((a.t, a.f));
+             } catch(Exception exc) {
+               if(Debugger.IsAttached)
+                 Debug.WriteLine(exc);
+             }
              if(Debugger.IsAttached)
                Debug.WriteLine($"+++{a.t.FullName}: start");
              var r = await d(null);
